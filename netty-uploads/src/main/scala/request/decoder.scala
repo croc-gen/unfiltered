@@ -1,30 +1,20 @@
 package unfiltered.netty.request
 
-import unfiltered.netty.{ ExceptionHandler, ReceivedMessage, RequestBinding }
+import unfiltered.netty.{ExceptionHandler, ReceivedMessage, RequestBinding}
 import unfiltered.request.POST
-import io.netty.channel.{ ChannelHandlerContext, ChannelInboundHandler }
-import io.netty.handler.codec.http.{
-  HttpRequest,
-  HttpContent,
-  HttpUtil,
-  LastHttpContent
-}
-import io.netty.handler.codec.http.multipart.{
-  Attribute,
-  DefaultHttpDataFactory,
-  FileUpload,
-  HttpPostRequestDecoder,
-  InterfaceHttpData
-}
+import io.netty.channel.{ChannelHandlerContext, ChannelInboundHandler}
+import io.netty.handler.codec.http._
+import io.netty.handler.codec.http.multipart._
 import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder.NotEnoughDataDecoderException
 import io.netty.util.{AttributeKey, AttributeMap}
+
 import scala.collection.JavaConverters._
 
 /** A PostDecoder wraps a HttpPostRequestDecoder. */
 class PostDecoder(req: HttpRequest, useDisk: Boolean = true) {
 
   /** Build a post decoder and parse the request. This only works with POST requests. */
-  private lazy val decoder: Option[HttpPostRequestDecoder] =// [InterfaceHttpPostRequestDecoder] in 4.0.14
+  private lazy val decoder: Option[HttpPostRequestDecoder] = // [InterfaceHttpPostRequestDecoder] in 4.0.14
     try Some(new HttpPostRequestDecoder(new DefaultHttpDataFactory(useDisk), req)) catch {
       /** Would it be more useful to throw errors here? */
       case e: HttpPostRequestDecoder.ErrorDataDecoderException =>
@@ -152,7 +142,7 @@ trait AbstractMultiPartDecoder extends CleanUp {
       val decoder = PostDecoder(request, useDisk)
       // Store the initial state
       ctx.asInstanceOf[AttributeMap].attr(PostDecoder.State).set(MultiPartChannelState(channelState.readingChunks, Some(request), decoder))
-      if (HttpUtil.isTransferEncodingChunked(request)) {
+      if (HttpHeaders.isTransferEncodingChunked(request)) {
         // Update the state to readingChunks = true
         ctx.asInstanceOf[AttributeMap].attr(PostDecoder.State).set(MultiPartChannelState(true, Some(request), decoder))
       } else {

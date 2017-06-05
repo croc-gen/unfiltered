@@ -8,7 +8,7 @@ import io.netty.buffer.{ ByteBufInputStream, ByteBufOutputStream, Unpooled }
 import io.netty.channel.{ ChannelFuture, ChannelFutureListener, ChannelHandlerContext }
 import io.netty.handler.codec.http.{
   DefaultHttpResponse, DefaultFullHttpResponse, HttpContent,
-  HttpHeaderValues, HttpHeaderNames, HttpMessage, HttpUtil,
+  HttpHeaders, HttpMessage, HttpUtil,
   HttpRequest => NettyHttpRequest, HttpResponse => NettyHttpResponse, HttpResponseStatus,
   HttpVersion }
 import io.netty.handler.ssl.SslHandler
@@ -40,14 +40,14 @@ class RequestBinding(msg: ReceivedMessage)
 
   private[this] lazy val params = queryParams ++ bodyParams
 
-  private def queryParams = req.uri.split("\\?", 2) match {
+  private def queryParams = req.getUri.split("\\?", 2) match {
     case Array(_, qs) => URLParser.urldecode(qs)
     case _ => Map.empty[String,Seq[String]]
   }
 
   private def bodyParams = (this, content) match {
     case ((POST(_) | PUT(_)) & RequestContentType(ct), Some(content))
-      if ct.contains(HttpHeaderValues.APPLICATION_X_WWW_FORM_URLENCODED.toString) =>
+      if ct.contains(HttpHeaders.Values.APPLICATION_X_WWW_FORM_URLENCODED) =>
       URLParser.urldecode(content.content.toString(JNIOCharset.forName(charset)))
     case _ =>
       Map.empty[String,Seq[String]]
@@ -63,12 +63,12 @@ class RequestBinding(msg: ReceivedMessage)
   lazy val reader =
     new BufferedReader(new InputStreamReader(inputStream, charset))
 
-  def protocol = req.protocolVersion.text()
+  def protocol = req.getProtocolVersion.text()
 
-  def method = req.method.toString.toUpperCase
+  def method = req.getMethod.toString.toUpperCase
 
   // todo should we call URLDecoder.decode(uri, charset) on this here?
-  def uri = req.uri
+  def uri = req.getUri
 
   def parameterNames = params.keySet.iterator
 
@@ -118,13 +118,13 @@ case class ReceivedMessage(
     case Pass =>
       context.fireChannelRead(request)
     case rf =>
-      val keepAlive = HttpUtil.isKeepAlive(request)
+      val keepAlive = HttpHeaders.isKeepAlive(request)
       lazy val closer = new unfiltered.response.Responder[NettyHttpResponse] {
         def respond(res: HttpResponse[NettyHttpResponse]): Unit = {
           res.outputStream.close() // close() triggers writing content to response body
           (
             if (keepAlive) {
-              val defaults = unfiltered.response.Connection(HttpHeaderValues.KEEP_ALIVE.toString)
+              val defaults = unfiltered.response.Connection(HttpHeaders.Values.KEEP_ALIVE)
               res.underlying match {
                 case Content(has) =>
                   defaults ~> unfiltered.response.ContentLength(
@@ -132,7 +132,7 @@ case class ReceivedMessage(
                 case _ =>
                   defaults
               }
-            } else unfiltered.response.Connection(HttpHeaderValues.CLOSE.toString)
+            } else unfiltered.response.Connection(HttpHeaders.Values.CLOSE)
           )(res)
         }
       }
@@ -164,13 +164,13 @@ class ResponseBinding[U <: NettyHttpResponse](res: U)
     res.setStatus(HttpResponseStatus.valueOf(code))
 
   def status: Int =
-    res.status.code()
+    res.getStatus.code()
 
   def header(name: String, value: String) =
     res.headers.add(name, value)
 
   def redirect(url: String) =
-    res.setStatus(HttpResponseStatus.FOUND).headers.add(HttpHeaderNames.LOCATION, url)
+    res.setStatus(HttpResponseStatus.FOUND).headers.add(HttpHeaders.Names.LOCATION, url)
 
   def outputStream = outStream
 }
